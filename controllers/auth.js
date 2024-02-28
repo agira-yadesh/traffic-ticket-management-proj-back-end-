@@ -2,6 +2,10 @@ const nodemailer = require("nodemailer");
 const speakeasy = require("speakeasy");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
+const {Op} = require("sequelize");
+
+const User = require("../models/users");
+const Ticket = require("../models/tickets");
 
 const users = [];
 
@@ -13,18 +17,24 @@ const emailTransporter = nodemailer.createTransport({
   },
 });
 
-exports.postSignup = (req, res, next) => {
+exports.postSignup = async (req, res, next) => {
   const fullName = req.body.fullName;
   const email = req.body.email;
-  const phone = req.body.phone;
+  const mobile = req.body.mobile;
 
-  if (!fullName || !email || !phone) {
-    return res.status(400).json({ error: "Please provide username, email" });
-  }
+  try {
+    const existingUser = await User.findOne({
+      where: {
+        [Op.or]:[{ email: email},{ mobile: mobile}],
+      },
 
-  if (users.some((user) => user.email === email || user.phone === phone)) {
+    });
+
+  if (existingUser) {
     return res.status(400).json({ error: "Username or email already exists" });
   }
+
+ 
 
 
   const otp = speakeasy.totp({
@@ -47,27 +57,52 @@ exports.postSignup = (req, res, next) => {
     }
   });
 
-  const newUser = { fullName, email, phone, otp, verified: false };
-  users.push(newUser);
-  console.log(newUser);
+  const otpExpiration = new Date().getTime()+ 5 * 60 * 1000
+
+  const newUser = await User.create({
+    fullname:fullName,
+    email,
+    mobile,
+    otp,
+    otpExpiration: otpExpiration,
+    verified:false
+    
+  });
+
+  // const newUser = { fullName, email, phone, otp, verified: false };
+  // users.push(newUser);
+  // console.log(newUser);
 
   res.status(201).json({ message: "User created successfully", user: newUser });
+} catch(error){
+  console.error(error);
+  res.status(500).json({ error: "internal server error "});
+
+}
 };
 
-exports.verifyOtp = (req, res, next) => {
+exports.verifyOtp = async (req, res, next) => {
   const email = req.body.email;
   const otp = req.body.otp;
   const password = req.body.password;
 
-  const user = users.find(
-    (user) => user.email === email && user.verified === false
-  );
+  try{
+    const user = await User.findOne({
+      where: {
+        email: email,
+        verified: false,
+        otpExpiration: {
+          [Op.gte]: new Date(), // Check if otpExpiration is greater than or equal to current time
+        },
+      },
+    });
 
-  if (!user) {
-    return res
+    if (!user){
+      return res
       .status(400)
       .json({ error: "Invalid email address or alreay verified" });
-  }
+    }
+
 
   if(otp !== user.otp){
     return res.status(400).json({ error: "Invalid Otp" });
@@ -87,21 +122,36 @@ exports.verifyOtp = (req, res, next) => {
 
   // console.log("Is OTP Valid:", isOTPValid);
 
-  bcrypt.hash(password, 12).then((hashedPassword) => {
-    user.password = hashedPassword;
-    user.verified = true;
-  });
+  const hashedPassword = await bcrypt.hash(password, 12);
+  user.password = hashedPassword;
+  user.verified = true;
+
+  await user.save();
+
+  setTimeout(async () => {
+    user.otp = null;
+    await user.save();
+    console.log('OTP cleared after 5 minutes.');
+  }, 5 * 60 * 1000);
+
 
   res.status(200).json({ message: "password set successfully." });
+} catch(error){
+  console.error(error);
+  res.status(500).json({ error: "Internal server error" });
+}
+
 };
+
 exports.loginPost = (req, res, next) => {
   const email = req.body.email;
   const password = req.body.password;
 
-  const user = users.find(
-    (user) =>
-      user.email === email 
-  );
+  User.findOne({
+    where: { email },
+    include: [{ model: Ticket, as: 'Tickets' }] // Assuming you've set the alias 'Tickets' in the association
+  })
+  .then(user =>{
 
   if (!user) {
     return res
@@ -113,12 +163,19 @@ exports.loginPost = (req, res, next) => {
         return res.status(500).json({error: "internal server error"});
     }
     if(match){
-        const token = jwt.sign({ email }, "your-secret-key", { expiresIn: "1h" });
-        res.status(200).json({ token });
+      const secretKey = "say_my_name_y_a_d_e_s_h"
+      const token = jwt.sign({ id: user.id, email: user.email }, secretKey, { expiresIn: "1h" });
+        res.status(200).json({ token,user, tickets: user.Tickets});
 
     } else {
         res.status(401).json({error: "invalid credentials."});
     }
+});
+})
+.catch(err=>{
+  console.log(err);
+  res.status(500).json({ error: 'Internal server error' });
+  
 });
 };
 
