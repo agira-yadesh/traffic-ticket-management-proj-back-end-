@@ -1,5 +1,7 @@
 const User = require("../models/users");
 const Ticket = require("../models/tickets");
+const bcrypt = require("bcryptjs");
+
 
 
 exports.getUserProfile = async (req, res, next)=>{
@@ -33,9 +35,7 @@ exports.editUserProfile = async (req, res, next)=>{
   try{
     const userId = req.user.id;
     const user = await User.findByPk(userId);
-    if(!user){
-      return res.status(404).json({error: 'User not found'});
-    }
+   
 
     user.DOB = req.body.dateOfBirth || user.DOB;
     user.drivingLicense =  req.body.drivingLicense || user.drivingLicense;
@@ -145,5 +145,50 @@ exports.editTicket = async(req,res,next)=>{
     return res.status(500).json({ error: 'Internal server error' });
 
   }
+};
+
+
+exports.changePassword = async(req,res,next)=>{
+  email=req.user.email
+  oldPassword = req.body.oldPassword;
+  newPassword = req.body.newPassword;
+
+
+
+  try{
+    const user = await User.findOne({
+      where:{
+        email: email,
+        verified:true
+      },
+    });
+
+    bcrypt.compare(oldPassword, user.password,async(err,match)=>{
+      if(err){
+        return res.send(500).json({error: "Old password is not correct"});
+      } if(match){
+        const hashedPassword = await bcrypt.hash(newPassword, 12);
+        user.password = hashedPassword;
+        await user.save()
+
+      }
+    })
+
+    res.status(200).json({ message: "password changed successfully." });
+    
+
+
+
+  
+
+
+  }catch(error){
+    console.error(error);
+    return res.status(500).json({ error: 'Internal server error' });
+
+  }
+
+
+
 }
 
