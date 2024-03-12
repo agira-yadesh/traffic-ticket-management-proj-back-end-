@@ -4,9 +4,11 @@ const authRoutes = require('./routes/auth');
 const { sequelize } = require("./util/database");
 const User = require("./models/users");
 const Ticket = require("./models/tickets");
-const authMiddleware = require('./middleware/auth');
+
+const cors = require('cors');
 
 const app = express();
+app.use(cors());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 
@@ -18,7 +20,7 @@ app.use(authRoutes);
 
 sequelize.sync()
 .then(()=>{
-    app.listen(3000);
+    app.listen(3000, '0.0.0.0');
 }).catch(err=>{
     console.log(err);
 })

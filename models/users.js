@@ -11,8 +11,8 @@ const Users = sequelize.define("user", {
   },
   fullname: {
     type: Sequelize.STRING,
-    required: true,
     allowNull: false,
+    
   },
   email: {
     type: Sequelize.STRING,
@@ -36,7 +36,7 @@ const Users = sequelize.define("user", {
     unique: true,
   },
   DOB: {
-    type: Sequelize.STRING,
+    type: Sequelize.DATE,
     allowNull: true,
     
   },
@@ -59,17 +59,21 @@ const Users = sequelize.define("user", {
   },
   otpExpiration: {
     type: Sequelize.DATE,
-    allowNull: true, // Allow null as OTP expiration might not be set yet
+    allowNull: true, 
   },
   verified: {
     type: Sequelize.BOOLEAN,
-    defaultValue: false, // Default value is false
+    defaultValue: false, 
   },
   password:{
     type:Sequelize.STRING,
     allowNull: true
 
 },
+  role: {
+    type: Sequelize.STRING,
+    defaultValue: 'user', 
+  },
 
 
 });

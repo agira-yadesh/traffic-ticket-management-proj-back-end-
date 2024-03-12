@@ -39,7 +39,7 @@ const Ticket = sequelize.define('ticket',{
 
     },
     date:{
-        type:Sequelize.STRING,
+        type:Sequelize.DATE,
         alowNull:false
     },
     imageUrl: {
@@ -56,11 +56,19 @@ const Ticket = sequelize.define('ticket',{
         type:Sequelize.INTEGER(7),
         alowNull: false,
         unique: true
+    },
+    submittedDate: {
+      type: Sequelize.DATE,
+      allowNull: false,
+      defaultValue: Sequelize.literal('CURRENT_DATE'),
     }
 
 },{
     hooks: {
       beforeCreate: async (ticket) => {
+
+        ticket.submittedDate = new Date();
+
         const generatedTicketNumber = await generateUniqueTicketNumber();
         ticket.ticketId = generatedTicketNumber;
       }
@@ -69,7 +77,7 @@ const Ticket = sequelize.define('ticket',{
 });
 
 async function generateUniqueTicketNumber() {
-    // Generate a random 7-digit number
+    // to generate a random 7digit number
     const randomTicketNumber = Math.floor(1000000 + Math.random() * 9000000);
   
 

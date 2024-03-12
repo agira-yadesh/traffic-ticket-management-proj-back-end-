@@ -7,7 +7,7 @@ const { Op } = require("sequelize");
 const User = require("../models/users");
 const Ticket = require("../models/tickets");
 
-const users = [];
+// const users = [];
 
 const emailTransporter = nodemailer.createTransport({
   service: "gmail",
@@ -18,7 +18,7 @@ const emailTransporter = nodemailer.createTransport({
 });
 
 exports.postSignup = async (req, res, next) => {
-  const fullName = req.body.fullName;
+  const fullName = req.body.fullname;
   const email = req.body.email;
   const mobile = req.body.mobile;
 
@@ -32,7 +32,7 @@ exports.postSignup = async (req, res, next) => {
     if (existingUser) {
       return res
         .status(400)
-        .json({ error: "Username or email already exists" });
+        .json({ error: "E-mail or mobile already exists" });
     }
 
     const otp = speakeasy.totp({
@@ -55,6 +55,8 @@ exports.postSignup = async (req, res, next) => {
       }
     });
 
+  
+
     const otpExpiration = new Date().getTime() + 5 * 60 * 1000;
 
     const newUser = await User.create({
@@ -70,52 +72,51 @@ exports.postSignup = async (req, res, next) => {
     // users.push(newUser);
     // console.log(newUser);
 
-    res
-      .status(201)
-      .json({ message: "User created successfully", user: newUser });
+    return res
+      .status(200)
+      .json({ message: "Verify OTP & Set Password TO Activate Your Account.", user: newUser });
   } catch (error) {
     console.error(error);
+    
     res.status(500).json({ error: "internal server error " });
   }
 };
+
 
 exports.setPassword = async (req, res, next) => {
   const email = req.body.email;
   const otp = req.body.otp;
   const password = req.body.password;
+  const confirmPassword = req.body.confirmPassword;
 
   try {
+
+    if (password !== confirmPassword) {
+      return res.status(400).json({ error: "Password and Confirm Password do not match" });
+    }
+    // console.log(`email${email}hi`)
+
+
     const user = await User.findOne({
       where: {
         email: email,
         verified: false,
-        otpExpiration: {
-          [Op.gte]: new Date(), // Check if otpExpiration is greater than or equal to current time
-        },
+        // otpExpiration: {
+        //   [Op.gte]: new Date(), // Check if otpExpiration is greater than or equal to current time
+        // },
       },
     });
 
     if (!user) {
       return res
         .status(400)
-        .json({ error: "Invalid email address or alreay verified" });
+        .json({ error: "Invalid email address" });
     }
 
     if (otp !== user.otp) {
       return res.status(400).json({ error: "Invalid Otp" });
     }
 
-    // console.log("Received OTP:", otp);
-    // console.log("User OTP Secret:", user.otpSecret.base32);
-
-    // const isOTPValid = speakeasy.totp.verify({
-    //   secret: user.otpSecret.base32,
-    //   encoding: "base32",
-    //   token: otp,
-    //   window: 3,
-    // });
-
-    // console.log("Is OTP Valid:", isOTPValid);
 
     const hashedPassword = await bcrypt.hash(password, 12);
     user.password = hashedPassword;
@@ -142,13 +143,13 @@ exports.loginPost = (req, res, next) => {
 
   User.findOne({
     where: { email },
-    include: [{ model: Ticket, as: "Tickets" }], // Assuming you've set the alias 'Tickets' in the association
+    include: [{ model: Ticket, as: "Tickets" }],
   })
     .then((user) => {
       if (!user) {
         return res
           .status(401)
-          .json({ error: "Invalid credentials or email not verified." });
+          .json({ error: "Invalid credentials" });
       }
       bcrypt.compare(password, user.password, (err, match) => {
         if (err) {
@@ -161,7 +162,8 @@ exports.loginPost = (req, res, next) => {
             secretKey,
             { expiresIn: "1h" }
           );
-          res.status(200).json({ token, user, tickets: user.Tickets });
+          res.status(200).json({ token, user,  message: 'LoggedIn' });
+          // console.log('logged')
         } else {
           res.status(401).json({ error: "invalid credentials." });
         }
@@ -196,7 +198,7 @@ exports.forgetPasswordPost = async (req, res, next) => {
       from: "moviesreviewhub00@gmail.com",
       to: email,
       subject: "Forgot passord",
-      text: `Hi! Your OTP for reset password is: ${otp}`,
+      text: `Hi! Your OTP to reset your password is: ${otp}`,
     };
 
     emailTransporter.sendMail(mailOptions, (error, info) => {
@@ -210,9 +212,9 @@ exports.forgetPasswordPost = async (req, res, next) => {
     const otpExpiration = new Date().getTime() + 5 * 60 * 1000;
     const secretKey = "say_my_name_y_a_d_e_s_h";
     const token = jwt.sign(
-      { email: email }, // Payload
-      secretKey,         // Secret Key
-      { expiresIn: '1h' } // Options
+      { email: email }, 
+      secretKey,       
+      { expiresIn: '1h' } 
     );
     await User.update(
       {
@@ -231,15 +233,13 @@ exports.forgetPasswordPost = async (req, res, next) => {
 
 exports.verifyOTP = async (req, res, next) => {
   const otp = req.body.otp;
-  const email = req.user.email;
+  // const email = req.user.email;
   try {
     const user = await User.findOne({
       where: {
         otp: otp,
         verified: true,
-        otpExpiration: {
-          [Op.gte]: new Date(), // Check if otpExpiration is greater than or equal to current time
-        },
+        
       },
     });
 
@@ -281,6 +281,7 @@ exports.resetPassword = async(req,res,next)=>{
 
     const hashedPassword = await bcrypt.hash(password, 12);
     user.password = hashedPassword;
+    user.otp = null;
     console.log(user.password)
 
     await user.save();
