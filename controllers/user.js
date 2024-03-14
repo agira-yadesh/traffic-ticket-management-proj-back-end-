@@ -6,27 +6,48 @@ const { Op } = require("sequelize");
 exports.getUserProfile = async (req, res, next) => {
   try {
     const userId = req.user.id;
-    console.log(userId);
+    console.log(`${userId} hi`);
 
-    const userProfile = await User.findByPk(userId, {
-      attributes: {
-        exclude: [
-          "id",
-          "password",
-          "otp",
-          "verified",
-          "otpExpiration",
-          "createdAt",
-          "updatedAt",
-        ],
-      },
-    });
+    const userProfile = await User.findByPk(userId);
+
+    const fullName = userProfile.fullname;
+    const email = userProfile.email;
+    const phone = userProfile.phone;
+    const mobile = userProfile.mobile;
+    const fax = userProfile.contactFax;
+    const dob = userProfile.DOB;
+    const dl = userProfile.drivingLicense;
+    const company = userProfile.company;
+
+    // const DOB = new Date(dob);
+
+    // const year = dob.getFullYear();
+    // const month = (dob.getMonth()+1).toString().padStart(2, '0');
+    // const day = dob.getDate().toString().padStart(2,'0');
+
+    // const dateOfBirth = `${year}-${month}-${day}`;
+
+    
+
+   const user = {
+      fullName,
+      email,
+      phone,
+      mobile,
+      fax,
+      dob,
+      dl,
+      company
+    }
+
+    
 
     if (!userProfile) {
       return res.status(404).json({ error: "User profile not found" });
     }
+    console.log(userProfile);
 
-    res.status(200).json({ userProfile });
+    res.status(200).json({ user });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Internal server error" });
@@ -35,6 +56,7 @@ exports.getUserProfile = async (req, res, next) => {
 
 exports.editUserProfile = async (req, res, next) => {
   try {
+    console.log(req.body);
     const userId = req.user.id;
     const user = await User.findByPk(userId);
 
@@ -45,9 +67,11 @@ exports.editUserProfile = async (req, res, next) => {
     user.contactFax = req.body.fax || user.contactFax;
 
     await user.save();
+    console.log(`hi${user.company}`);
     return res
       .status(200)
       .json({ message: "Profile updated successfully", user });
+      
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error: "Internal server error" });
@@ -136,8 +160,15 @@ exports.changePassword = async (req, res, next) => {
   email = req.user.email;
   oldPassword = req.body.oldPassword;
   newPassword = req.body.newPassword;
+  confirmPassword = req.body.confirmPassword;
+
 
   try {
+
+    if (newPassword !== confirmPassword) {
+      return res.status(400).json({ error: "Password and Confirm Password do not match" });
+    }
+
     const user = await User.findOne({
       where: {
         email: email,
